@@ -1,0 +1,30 @@
+{
+  "name": "render-keep-alive-playwright",
+  "version": "1.0.0",
+  "description": "100% Free Keep-Alive and Poke mechanism for Render Web Services using Playwright and GitHub Actions",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "poke": "ts-node src/index.ts",
+    "poke:request": "cross-env POKE_MODE=request ts-node src/index.ts",
+    "poke:daemon": "ts-node src/index.ts --daemon"
+  },
+  "keywords": [
+    "render",
+    "keepalive",
+    "playwright",
+    "cron",
+    "github-actions"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.49.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,57 @@
+name: Render Keep-Alive Poke Bot
+
+on:
+  schedule:
+    # Runs every 12 minutes (Render free tier spins down after 15 minutes of inactivity)
+    - cron: '*/12 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions dashboard
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: keep-alive-poke
+  cancel-in-progress: true
+
+jobs:
+  poke:
+    name: Poke Render Web Service
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🎭 Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+
+      - name: 🌐 Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: 🌐 Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: 🚀 Run Keep-Alive Poke
+        env:
+          TARGET_URLS: ${{ secrets.TARGET_URLS || secrets.RENDER_APP_URL || vars.TARGET_URLS || 'https://your-app-name.onrender.com' }}
+          TIMEOUT_MS: '90000'
+          MAX_RETRIES: '3'
+          POKE_MODE: 'browser'
+        run: npm run poke

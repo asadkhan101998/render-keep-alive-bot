@@ -33,25 +33,10 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🎭 Cache Playwright Browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
-
-      - name: 🌐 Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: 🌐 Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
-
       - name: 🚀 Run Keep-Alive Poke
         env:
           TARGET_URLS: ${{ secrets.TARGET_URLS || secrets.RENDER_APP_URL || vars.TARGET_URLS || 'https://your-app-name.onrender.com' }}
           TIMEOUT_MS: '90000'
           MAX_RETRIES: '3'
-          POKE_MODE: 'browser'
+          POKE_MODE: 'request'
         run: npm run poke

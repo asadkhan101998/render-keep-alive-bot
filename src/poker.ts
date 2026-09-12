@@ -128,11 +128,20 @@ async function pokeWithRequest(url: string, config: PokeConfig): Promise<PokeRes
           };
         } else {
           console.warn(`⚠️ Status ${statusCode} received. Retrying...`);
+          // Backoff before retrying on non-2xx/3xx responses (e.g. 503 from Render cold-start)
+          if (attempts < config.maxRetries) {
+            // First backoff is longer (15s) to give Render's cold-start time to spin up,
+            // subsequent backoffs increase with each attempt
+            const backoffMs = attempts === 1 ? 15000 : attempts * 10000;
+            console.log(`⏸️ Waiting ${backoffMs / 1000}s for service to wake up before retry...`);
+            await new Promise((r) => setTimeout(r, backoffMs));
+          }
         }
       } catch (err: any) {
         console.error(`❌ Request error on attempt ${attempts}: ${err.message}`);
         if (attempts < config.maxRetries) {
-          const backoffMs = attempts * 3000;
+          const backoffMs = attempts === 1 ? 15000 : attempts * 10000;
+          console.log(`⏸️ Waiting ${backoffMs / 1000}s before next retry...`);
           await new Promise((r) => setTimeout(r, backoffMs));
         }
       }

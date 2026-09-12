@@ -18,7 +18,7 @@ jobs:
   poke:
     name: Poke Render Web Service
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: 📥 Checkout repository
@@ -37,6 +37,6 @@ jobs:
         env:
           TARGET_URLS: ${{ secrets.TARGET_URLS || secrets.RENDER_APP_URL || vars.TARGET_URLS || 'https://your-app-name.onrender.com' }}
           TIMEOUT_MS: '90000'
-          MAX_RETRIES: '3'
+          MAX_RETRIES: '5'
           POKE_MODE: 'request'
         run: npm run poke

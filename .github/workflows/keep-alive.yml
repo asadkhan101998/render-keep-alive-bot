@@ -2,41 +2,101 @@ name: Render Keep-Alive Poke Bot
 
 on:
   schedule:
-    # Runs every 12 minutes (Render free tier spins down after 15 minutes of inactivity)
-    - cron: '*/12 * * * *'
+    # Runs every 14 minutes (Render free tier spins down after 15 minutes of inactivity)
+    # Using */14 instead of */12 to reduce GitHub Actions load and avoid dropped jobs
+    - cron: '*/14 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions dashboard
   push:
     branches:
       - main
       - master
 
-concurrency:
-  group: keep-alive-poke
-  cancel-in-progress: true
+# IMPORTANT: No concurrency group! Cron-triggered runs were getting cancelled
+# by push events or by each other due to cancel-in-progress: true
 
 jobs:
   poke:
-    name: Poke Render Web Service
+    name: Poke Render Services
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
+    # Don't let failures accumulate — GitHub throttles/delays cron after repeated failures
+    continue-on-error: true
 
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - name: 🏓 Ping Backend
+        run: |
+          echo "⚡ Pinging backend at $(date -u)"
+          # First request wakes up the service, wait for cold-start, then verify
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+            -H "User-Agent: Render-KeepAlive-Bot/1.0" \
+            "${{ secrets.TARGET_URLS && 'https://resutailor-backend-dev.onrender.com/' || vars.TARGET_URLS || 'https://resutailor-backend-dev.onrender.com/' }}" \
+            || echo "000")
+          echo "First response: HTTP $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "✅ Backend is awake!"
+          else
+            echo "⏳ Backend returned $STATUS (likely cold-starting). Waiting 30s..."
+            sleep 30
+            STATUS2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+              -H "User-Agent: Render-KeepAlive-Bot/1.0" \
+              "https://resutailor-backend-dev.onrender.com/" \
+              || echo "000")
+            echo "Second response: HTTP $STATUS2"
+            if [ "$STATUS2" -ge 200 ] && [ "$STATUS2" -lt 400 ]; then
+              echo "✅ Backend woke up!"
+            else
+              echo "⚠️ Backend still not ready (HTTP $STATUS2). Will retry next cycle."
+            fi
+          fi
 
-      - name: 🟢 Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
+      - name: 🏓 Ping Frontend
+        run: |
+          echo "⚡ Pinging frontend at $(date -u)"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+            -H "User-Agent: Render-KeepAlive-Bot/1.0" \
+            "https://resutailor-frontend-dev.onrender.com/sign-in" \
+            || echo "000")
+          echo "First response: HTTP $STATUS"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "✅ Frontend is awake!"
+          else
+            echo "⏳ Frontend returned $STATUS (likely cold-starting). Waiting 30s..."
+            sleep 30
+            STATUS2=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+              -H "User-Agent: Render-KeepAlive-Bot/1.0" \
+              "https://resutailor-frontend-dev.onrender.com/sign-in" \
+              || echo "000")
+            echo "Second response: HTTP $STATUS2"
+            if [ "$STATUS2" -ge 200 ] && [ "$STATUS2" -lt 400 ]; then
+              echo "✅ Frontend woke up!"
+            else
+              echo "⚠️ Frontend still not ready (HTTP $STATUS2). Will retry next cycle."
+            fi
+          fi
 
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🚀 Run Keep-Alive Poke
-        env:
-          TARGET_URLS: ${{ secrets.TARGET_URLS || secrets.RENDER_APP_URL || vars.TARGET_URLS || 'https://your-app-name.onrender.com' }}
-          TIMEOUT_MS: '90000'
-          MAX_RETRIES: '5'
-          POKE_MODE: 'request'
-        run: npm run poke
+  # Prevent GitHub from disabling the scheduled workflow due to repo inactivity
+  # GitHub disables cron schedules after 60 days with no repo activity
+  keep-cron-alive:
+    name: Keep Cron Schedule Active
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - name: 🔄 Keep repository active
+        run: |
+          # Check if last commit is older than 50 days
+          LAST_COMMIT_DATE=$(git log -1 --format=%ct)
+          CURRENT_DATE=$(date +%s)
+          DAYS_SINCE=$((($CURRENT_DATE - $LAST_COMMIT_DATE) / 86400))
+          echo "Days since last commit: $DAYS_SINCE"
+          if [ "$DAYS_SINCE" -gt 50 ]; then
+            echo "⚠️ Repository approaching 60-day inactivity limit. Creating keep-alive commit..."
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            date -u > .github/.keep-alive
+            git add .github/.keep-alive
+            git commit -m "chore: keep-alive commit to prevent workflow schedule deactivation [skip ci]"
+            git push
+          else
+            echo "✅ Repository is active ($DAYS_SINCE days since last commit)"
+          fi

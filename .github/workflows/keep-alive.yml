@@ -2,11 +2,9 @@ name: Render Keep-Alive Poke Bot
 
 on:
   schedule:
-    # Runs every 5 minutes — GitHub may throttle/skip some runs, but shorter
-    # interval maximizes the chance at least one run lands within Render's
-    # 15-minute inactivity window. This is a BACKUP layer; primary keep-alive
-    # is handled by external uptime monitors (UptimeRobot, Cron-Job.org).
-    - cron: '*/5 * * * *'
+    # Runs every 14 minutes — Render free tier spins down after 15 minutes.
+    # GitHub Actions cron is unreliable, so Cron-Job.org is the primary keep-alive.
+    - cron: '*/14 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions dashboard
   push:
     branches:
